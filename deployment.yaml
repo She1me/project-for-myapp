@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+  labels:
+    app: myapp
+spec:
+  replicas: 4  # Количество реплик приложения
+  selector:
+    matchLabels:
+      app: myapp
+  template:
+    metadata:
+      labels:
+        app: myapp
+    spec:
+      containers:
+      - name: myapp
+        image: image:latest  # Образ приложения
+        resources:
+          requests:
+            memory: "128Mi"  # Ровное потребление памяти 128Mi
+            cpu: "100m"  # Ровное потребление CPU ~0.1
+          limits:
+            memory: "128Mi"  # Лимит по памяти
+            cpu: "500m"  # Лимит по CPU для первых запросов
+        readinessProbe:
+          httpGet:
+            path: /healthz  # Путь к приложению
+            port: 8080 # проверяем готовность приложения через мониторинговый порт
+          initialDelaySeconds: 10  # Учитываем время инициализации приложения
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /healthz # путь к приложению
+            port: 8080 # проверяем живучесть приложения через мониторинговый порт
+          initialDelaySeconds: 15  # Позволяем приложению инициализироваться
+          periodSeconds: 10
+        ports:
+        - containerPort: 80
+        - containerPort: 8080  # Дополнительный порт для мониторинга
+
+---
+
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: myapp-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: myapp
+  minReplicas: 2  # Минимум 2 реплики ночью для экономии ресурсов
+  maxReplicas: 6  # Максимум 6 реплик для покрытия дневной нагрузки
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50  # Среднее использование CPU на уровне 50% для оптимизации ресурсоиспользования
